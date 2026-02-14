@@ -8,6 +8,7 @@ import { ArticleStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { LumiTooltip } from "@/components/lumi-tooltip";
 
 type HomeProps = {
   searchParams: Promise<{
@@ -74,7 +75,7 @@ export default async function Home({ searchParams }: HomeProps) {
           <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
             Trusted health knowledge powered by{" "}
             <span className="bg-gradient-to-r from-teal-400 to-amber-400 bg-clip-text text-transparent">
-              Lumi and always-on review agents.
+              <LumiTooltip>Lumi</LumiTooltip> and always-on review agents.
             </span>
           </h1>
           <p className="mt-3 max-w-2xl text-base text-muted-foreground">
