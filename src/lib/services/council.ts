@@ -110,40 +110,42 @@ export async function runCouncilForArticle(articleId: string): Promise<CouncilOu
   }));
 
   try {
-    const startEvidence = Date.now();
-    const evidence = await generateGroundedJson({
-      prompt: evidenceJudgePrompt({
-        title: article.title,
-        summary: article.summary,
-        bodyMarkdown: article.bodyMarkdown,
-        citations: citationInput,
+    // Run all three judges in parallel -- they are independent evaluations
+    const judgeStart = Date.now();
+    const [evidence, safety, clarity] = await Promise.all([
+      generateGroundedJson({
+        prompt: evidenceJudgePrompt({
+          title: article.title,
+          summary: article.summary,
+          bodyMarkdown: article.bodyMarkdown,
+          citations: citationInput,
+        }),
+        schema: councilJudgeSchema,
+        grounded: true,
+        maxOutputTokens: 1024,
       }),
-      schema: councilJudgeSchema,
-      grounded: true,
-      maxOutputTokens: 1024,
-    });
-    const startSafety = Date.now();
-    const safety = await generateGroundedJson({
-      prompt: safetyJudgePrompt({
-        title: article.title,
-        summary: article.summary,
-        bodyMarkdown: article.bodyMarkdown,
+      generateGroundedJson({
+        prompt: safetyJudgePrompt({
+          title: article.title,
+          summary: article.summary,
+          bodyMarkdown: article.bodyMarkdown,
+        }),
+        schema: councilJudgeSchema,
+        grounded: true,
+        maxOutputTokens: 1024,
       }),
-      schema: councilJudgeSchema,
-      grounded: true,
-      maxOutputTokens: 1024,
-    });
-    const startClarity = Date.now();
-    const clarity = await generateGroundedJson({
-      prompt: clarityJudgePrompt({
-        title: article.title,
-        summary: article.summary,
-        bodyMarkdown: article.bodyMarkdown,
+      generateGroundedJson({
+        prompt: clarityJudgePrompt({
+          title: article.title,
+          summary: article.summary,
+          bodyMarkdown: article.bodyMarkdown,
+        }),
+        schema: councilJudgeSchema,
+        grounded: true,
+        maxOutputTokens: 1024,
       }),
-      schema: councilJudgeSchema,
-      grounded: true,
-      maxOutputTokens: 1024,
-    });
+    ]);
+    const judgeLatency = Date.now() - judgeStart;
 
     const evidencePayload =
       evidence.data ??
@@ -224,7 +226,7 @@ export async function runCouncilForArticle(articleId: string): Promise<CouncilOu
             rationale: evidencePayload.rationale,
             citationsJson: evidencePayload.citedUrls,
             groundingJson: evidence.groundingMetadata ?? {},
-            latencyMs: Date.now() - startEvidence,
+            latencyMs: judgeLatency,
           },
           {
             councilRunId: councilRun.id,
@@ -234,7 +236,7 @@ export async function runCouncilForArticle(articleId: string): Promise<CouncilOu
             rationale: safetyPayload.rationale,
             citationsJson: safetyPayload.citedUrls,
             groundingJson: safety.groundingMetadata ?? {},
-            latencyMs: Date.now() - startSafety,
+            latencyMs: judgeLatency,
           },
           {
             councilRunId: councilRun.id,
@@ -244,7 +246,7 @@ export async function runCouncilForArticle(articleId: string): Promise<CouncilOu
             rationale: clarityPayload.rationale,
             citationsJson: clarityPayload.citedUrls,
             groundingJson: clarity.groundingMetadata ?? {},
-            latencyMs: Date.now() - startClarity,
+            latencyMs: judgeLatency,
           },
         ],
       });

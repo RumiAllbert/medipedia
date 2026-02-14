@@ -8,7 +8,7 @@ import {
   type MetadataPayload,
   type RelatedCandidate,
 } from "@/lib/ai/contracts";
-import { generateGroundedJson } from "@/lib/ai/gemini";
+import { generateGroundedJson, type GroundingChunk } from "@/lib/ai/gemini";
 import {
   articlePrompt,
   DEFAULT_GEMINI_MODEL,
@@ -325,6 +325,24 @@ export async function processGenerationJob(jobId: string): Promise<void> {
     });
     const payload = generated.data ?? fallbackArticle(job.topicTitle);
 
+    // Merge Google Search grounding chunks into citations as verified sources
+    const aiCitations = payload.citations.map((citation) => ({
+      title: citation.title,
+      url: citation.url,
+      sourceType: citation.sourceType,
+      publishedAt: citation.publishedAt ? new Date(citation.publishedAt) : null,
+    }));
+    const existingUrls = new Set(aiCitations.map((c) => c.url));
+    const groundedCitations = generated.groundingChunks
+      .filter((chunk: GroundingChunk) => !existingUrls.has(chunk.uri))
+      .map((chunk: GroundingChunk) => ({
+        title: chunk.title,
+        url: chunk.uri,
+        sourceType: "google-search-grounding" as string,
+        publishedAt: null,
+      }));
+    const allCitations = [...aiCitations, ...groundedCitations];
+
     const article = await prisma.article.create({
       data: {
         slug: job.topicSlug,
@@ -336,12 +354,7 @@ export async function processGenerationJob(jobId: string): Promise<void> {
         createdBy: "ai-generator",
         createdById: job.requestedById ?? null,
         citations: {
-          create: payload.citations.map((citation) => ({
-            title: citation.title,
-            url: citation.url,
-            sourceType: citation.sourceType,
-            publishedAt: citation.publishedAt ? new Date(citation.publishedAt) : null,
-          })),
+          create: allCitations,
         },
         revisions: {
           create: {

@@ -1,4 +1,4 @@
-export const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
 export function metadataPrompt(markdown: string): string {
   return [
