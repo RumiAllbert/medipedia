@@ -143,8 +143,20 @@ function ArticleList({ articles, showEdit, showReview }: ArticleListProps) {
   if (articles.length === 0) {
     return (
       <Card className="mt-4">
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          No articles in this category.
+        <CardContent className="flex flex-col items-center py-10 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
+            <FileText className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <p className="mt-4 text-sm font-medium">No articles in this category</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Create your first article to get started.
+          </p>
+          <Button variant="outline" size="sm" asChild className="mt-4">
+            <Link href="/dashboard/editor">
+              <Plus className="mr-2 h-4 w-4" />
+              New article
+            </Link>
+          </Button>
         </CardContent>
       </Card>
     );
