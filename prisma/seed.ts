@@ -213,6 +213,8 @@ Seek urgent care for chest pain, neurologic symptoms, severe shortness of breath
         consensusScore: 87,
       },
       publishEligible: true,
+      promptVersion: "e2+s2+c2",
+      policyVersion: "2026-02-14.safety-first-strict.v1",
       judgeResults: {
         create: [
           {
