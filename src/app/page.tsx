@@ -65,13 +65,17 @@ export default async function Home({ searchParams }: HomeProps) {
     <div className="mx-auto w-full max-w-6xl px-6 py-10">
       {/* Hero */}
       <section className="relative overflow-hidden rounded-3xl border bg-card p-8 shadow-sm">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,116,144,0.08),transparent_45%),radial-gradient(circle_at_left,rgba(245,158,11,0.07),transparent_40%)] dark:bg-[radial-gradient(circle_at_top_right,rgba(14,116,144,0.15),transparent_45%),radial-gradient(circle_at_left,rgba(245,158,11,0.1),transparent_40%)]" />
+        <div className="pointer-events-none absolute -right-32 -top-32 h-[500px] w-[500px] animate-pulse-slow rounded-full bg-teal-500/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-32 h-[400px] w-[400px] animate-pulse-slow rounded-full bg-amber-500/10 blur-3xl [animation-delay:2s]" />
         <div className="relative">
           <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
             Knowledge council enabled
           </p>
-          <h1 className="mt-3 max-w-3xl text-5xl font-semibold leading-tight tracking-tight">
-            Trusted health knowledge powered by Lumi and always-on review agents.
+          <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
+            Trusted health knowledge powered by{" "}
+            <span className="bg-gradient-to-r from-teal-400 to-amber-400 bg-clip-text text-transparent">
+              Lumi and always-on review agents.
+            </span>
           </h1>
           <p className="mt-3 max-w-2xl text-base text-muted-foreground">
             Every article publishes with explainable scoring, citation tiers, and continuous
@@ -91,6 +95,20 @@ export default async function Home({ searchParams }: HomeProps) {
             {sort && <input type="hidden" name="sort" value={sort} />}
             <Button type="submit">Search</Button>
           </form>
+          <div className="mt-6 flex flex-wrap gap-6 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span>{result.totalCount} published articles</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-teal-500" />
+              <span>Council-verified</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-amber-500" />
+              <span>Continuously reviewed</span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -165,15 +183,19 @@ export default async function Home({ searchParams }: HomeProps) {
       )}
 
       {result.items.length === 0 && (
-        <section className="mt-8 rounded-2xl border bg-card p-8 text-center shadow-sm">
-          {q ? (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">
+        q ? (
+          <section className="mt-8 rounded-2xl border bg-card p-10 text-center shadow-sm">
+            <div className="mx-auto max-w-md space-y-4">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+                <Search className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h2 className="text-xl font-semibold">No results found</h2>
+              <p className="text-sm text-muted-foreground">
                 No published articles matching &ldquo;{q}&rdquo;
               </p>
               <Link
                 href={`/articles/${q.trim().toLowerCase().replace(/\s+/g, "-")}?from=search`}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal-500 to-amber-500 px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
               >
                 <Sparkles className="h-4 w-4" />
                 Generate &ldquo;{q.trim()}&rdquo; with Lumi
@@ -182,13 +204,20 @@ export default async function Home({ searchParams }: HomeProps) {
                 Lumi will create an evidence-based article and run council quality scoring.
               </p>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No published articles yet. Run migrations, seed data, then publish your first reviewed
-              article.
-            </p>
-          )}
-        </section>
+          </section>
+        ) : (
+          <section className="mt-8 rounded-2xl border bg-card p-10 text-center shadow-sm">
+            <div className="mx-auto max-w-md space-y-4">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+                <Sparkles className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h2 className="text-xl font-semibold">No articles yet</h2>
+              <p className="text-sm text-muted-foreground">
+                Run migrations, seed data, then publish your first reviewed article.
+              </p>
+            </div>
+          </section>
+        )
       )}
     </div>
   );
