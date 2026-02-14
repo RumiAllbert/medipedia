@@ -1,5 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TrustScoreGauge } from "./trust-score-gauge";
 
 type ScoreBarProps = {
   label: string;
@@ -26,7 +27,7 @@ function ScoreBar({ label, score, weight }: ScoreBarProps) {
       </div>
       <div className="h-2 w-full rounded-full bg-muted">
         <div
-          className={`h-full rounded-full transition-all ${color}`}
+          className={`h-full rounded-full transition-all duration-500 ${color}`}
           style={{ width: `${score}%` }}
         />
       </div>
@@ -54,23 +55,10 @@ export function TrustScorecard({
   nextReviewAt,
 }: TrustScorecardProps) {
   return (
-    <Card>
+    <Card className="glass-strong rounded-2xl">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">Trust Score</CardTitle>
-          <Badge
-            variant={
-              trustScore >= 85
-                ? "success"
-                : trustScore >= 70
-                  ? "warning"
-                  : "destructive"
-            }
-          >
-            {trustScore}/100
-          </Badge>
-        </div>
-        <Badge variant="neutral" className="mt-1 w-fit">
+        <TrustScoreGauge score={trustScore} />
+        <Badge variant="neutral" className="mx-auto mt-3 w-fit">
           {confidenceLabel}
         </Badge>
       </CardHeader>
