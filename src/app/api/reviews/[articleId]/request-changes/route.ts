@@ -22,6 +22,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!article) {
     return NextResponse.json({ error: "Article not found" }, { status: 404 });
   }
+  if (article.status !== ArticleStatus.PENDING_REVIEW) {
+    return NextResponse.json(
+      { error: "Only pending-review articles can be sent back for changes." },
+      { status: 409 },
+    );
+  }
 
   const review = await prisma.review.create({
     data: {

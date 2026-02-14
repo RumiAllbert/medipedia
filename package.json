@@ -13,6 +13,9 @@
     "prisma:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:seed-articles": "npx tsx prisma/seed-articles.ts",
+    "db:regenerate": "npx tsx prisma/regenerate-articles.ts",
+    "db:re-enrich": "npx tsx prisma/re-enrich-articles.ts",
+    "db:backfill-traceability": "npx tsx prisma/backfill-traceability.ts",
     "agent:tick": "curl -s -X POST http://localhost:3000/api/internal/agent/tick -H \"x-agent-secret: $AGENT_TICK_SECRET\""
   },
   "dependencies": {

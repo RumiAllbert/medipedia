@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth/guard";
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const authz = await requireRole(Role.CONTRIBUTOR);
   if (!authz.ok) return authz.response;
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
-import { Users, Globe, AlertTriangle, LayoutDashboard } from "lucide-react";
+import { Users, Globe, AlertTriangle, LayoutDashboard, Bot } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { hasRole } from "@/lib/auth/roles";
@@ -46,6 +46,12 @@ export default async function AdminLayout({
           <Link href="/admin/alerts">
             <AlertTriangle className="mr-2 h-3.5 w-3.5" />
             Alerts
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link href="/admin/jobs">
+            <Bot className="mr-2 h-3.5 w-3.5" />
+            Jobs
           </Link>
         </Button>
       </div>

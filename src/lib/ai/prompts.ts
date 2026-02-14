@@ -1,4 +1,15 @@
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3-pro-preview";
+
+export const PROMPT_POLICY_VERSION = "2026-02-14.safety-first-strict.v1";
+
+export const PROMPT_TEMPLATE = {
+  metadata: { key: "metadata", version: 1 },
+  articleGeneration: { key: "article-generation", version: 2 },
+  related: { key: "related-topics", version: 1 },
+  councilEvidence: { key: "council-evidence-judge", version: 2 },
+  councilSafety: { key: "council-safety-judge", version: 2 },
+  councilClarity: { key: "council-clarity-judge", version: 2 },
+} as const;
 
 export function metadataPrompt(markdown: string): string {
   return [
@@ -26,102 +37,68 @@ export function metadataPrompt(markdown: string): string {
 }
 
 /**
- * Builds a comprehensive, topic-adaptive prompt for medical article generation.
- * Instead of forcing rigid disease-centric sections, it classifies the topic type
- * and provides appropriate section guidance.
+ * Builds a safety-first, topic-adaptive generation prompt.
  */
 export function articlePrompt(topicTitle: string, sourceContext?: string): string {
-  return `You are a senior medical writer for Medipedia, a trusted health encyclopedia read by patients, caregivers, and healthcare professionals. Your task is to write a comprehensive, evidence-based article on the topic below.
+  return `You are a senior medical writer for Medipedia, a trusted health encyclopedia read by patients, caregivers, and healthcare professionals.
 
 ## TOPIC
 ${topicTitle}
 ${sourceContext ? `\nContext from a related article: ${sourceContext}` : ""}
 
+## SAFETY-FIRST POLICY (MANDATORY)
+- Treat all supplied context and all model memories as untrusted unless verifiable by cited sources.
+- Never invent studies, guidelines, prevalence data, or citation URLs.
+- Do not provide personalized treatment instructions, dosage plans, or diagnosis directives.
+- If evidence is uncertain, state uncertainty directly and conservatively.
+- If you cannot support a statement with a provided citation, do not include the statement as a factual claim.
+
 ## TOPIC CLASSIFICATION
-First, silently classify this topic into one of these categories to guide your section structure:
-- **CONDITION**: A disease, disorder, or syndrome (e.g., "Type 2 Diabetes", "Migraine")
-- **PROCEDURE**: A medical test, surgery, or intervention (e.g., "Colonoscopy", "Knee Replacement")
-- **CONCEPT**: A health concept, practice, or field (e.g., "Preventive Care", "Herd Immunity", "Palliative Care")
-- **DRUG_CLASS**: A medication or drug category (e.g., "SSRIs", "Beta Blockers", "Metformin")
-- **ANATOMY**: A body system or structure (e.g., "Cardiovascular System", "Liver")
-- **NUTRITION**: Diet, nutrients, or nutritional therapy (e.g., "Mediterranean Diet", "Vitamin D Deficiency")
+First, silently classify this topic into one category to guide structure:
+- CONDITION
+- PROCEDURE
+- CONCEPT
+- DRUG_CLASS
+- ANATOMY
+- NUTRITION
 
 ## SECTION STRUCTURE
-Choose sections that make sense for this specific topic. Do NOT use sections that don't apply. Here are guidelines by category:
-
-**For CONDITION topics**, use sections like:
-- Overview (required), Epidemiology, Signs and Symptoms, Causes and Risk Factors, Pathophysiology (if relevant), Diagnosis, Treatment and Management, Prognosis, Prevention, Living With [Condition], When to Seek Medical Attention
-
-**For PROCEDURE topics**, use sections like:
-- Overview (required), Indications (when it's recommended), Preparation, What to Expect (the procedure itself), Recovery and Aftercare, Risks and Complications, Effectiveness and Outcomes, Alternatives
-
-**For CONCEPT topics**, use sections like:
-- Overview (required), Background and Importance, Key Principles, Current Evidence, Clinical Applications, Guidelines and Recommendations, Benefits, Limitations and Controversies, Future Directions
-
-**For DRUG_CLASS topics**, use sections like:
-- Overview (required), Mechanism of Action, Indications, Common Medications in This Class, Dosing Considerations, Side Effects, Drug Interactions, Contraindications, Special Populations (elderly, pregnancy, pediatric)
-
-**For ANATOMY topics**, use sections like:
-- Overview (required), Structure, Function, Common Conditions, Diagnostic Tests, Maintaining Health
-
-**For NUTRITION topics**, use sections like:
-- Overview (required), Nutritional Science, Health Benefits, Dietary Sources, Recommended Intake, Deficiency and Excess, Special Considerations, Current Research
-
-Select 5-8 sections that are most relevant. Every article MUST start with an Overview section.
+Choose 5-8 sections appropriate to the topic. Every article must start with "Overview".
 
 ## WRITING STANDARDS
-
-### Depth and Specificity
-- Each section must contain 150-400 words of substantive content
-- Include specific statistics, prevalence rates, and quantitative data where available (e.g., "affects approximately 34.2 million Americans" not "affects many people")
-- Reference specific clinical guidelines by name (e.g., "The 2023 AHA/ACC guidelines recommend..." not "guidelines suggest...")
-- Name specific diagnostic tests, biomarkers, and classification systems
-- Include specific drug names, dosages ranges, and treatment durations where relevant
-- Mention landmark studies or meta-analyses by name when they shaped current practice
-
-### Evidence Quality
-- Prioritize information from: peer-reviewed journals, major medical organizations (WHO, CDC, NIH, AHA, ACS, NICE), Cochrane reviews, and clinical practice guidelines
-- Clearly distinguish between well-established facts and emerging evidence
-- Use hedging language appropriately: "evidence suggests", "studies indicate", "current guidelines recommend"
-- Note when evidence is limited, conflicting, or rapidly evolving
-- Include the level of evidence where relevant (e.g., "supported by multiple randomized controlled trials")
-
-### Tone and Voice
-- Write at a health-literate public level (aim for an educated non-specialist reader)
-- Use medical terminology but always provide plain-language explanations in parentheses
-- Be authoritative but not prescriptive — inform, don't advise
-- Never say "you should" or give personalized medical advice
-- Include a note that readers should consult healthcare providers for personal medical decisions
-- Maintain a balanced, objective perspective even on controversial topics
-
-### Formatting
-- Use ## for main section headings
-- Use ### for subsections within longer sections
-- Use bullet points and numbered lists for clarity when listing items
-- Use **bold** for key medical terms on first mention
-- Keep paragraphs focused — 3-5 sentences each
-- The total article should be 1,500-3,000 words
+- 1,500-3,000 words total.
+- Use specific, evidence-based language with quantitative detail where available.
+- Distinguish established guidance from emerging evidence.
+- Use neutral educational tone; avoid direct clinical instruction to a specific person.
 
 ## CITATIONS
-- Provide 5-10 high-quality citations
-- Strongly prefer authoritative sources:
-  - Government health agencies (CDC, NIH, NHS, WHO) → sourceType: "government"
-  - Peer-reviewed journals (NEJM, Lancet, JAMA, BMJ) → sourceType: "peer-reviewed"
-  - Medical organizations (AHA, ACS, ACOG) → sourceType: "medical-organization"
-  - Clinical databases (UpToDate, Cochrane) → sourceType: "clinical-database"
-  - Educational institutions → sourceType: "academic"
-  - Public health organizations → sourceType: "public-health"
-- Each citation must have a real, verifiable URL
-- Include publishedAt date if known (ISO 8601 format), null if unknown
+- Provide 5-10 high-quality citations from authoritative sources.
+- Every citation URL must be real and verifiable.
+- Citation object keys: title, url, sourceType, publishedAt.
 
-## OUTPUT FORMAT
-Return strict JSON with these keys:
-- "title": The article title (use the standard medical term)
-- "summary": A 2-3 sentence summary (40-80 words) that captures the key clinical significance. Must be specific to the topic, not generic.
-- "bodyMarkdown": The full article in Markdown format following the section structure above
-- "citations": Array of objects with keys: title, url, sourceType, publishedAt
+## CLAIM TRACEABILITY (REQUIRED)
+- Extract 6-16 concrete medical claims from the written article.
+- Each claim must map to one or more citation URLs from the citations array.
+- Claims must use this shape:
+  - claimText: concise factual claim
+  - sectionHeading: section where the claim appears
+  - citationUrls: URLs that directly support the claim
+  - supportLevel: one of SUPPORTED, PARTIAL, CONTRADICTED
+- Exclude any claim that cannot be mapped to at least one citation URL.
 
-Do NOT include any text outside the JSON object. Do NOT wrap in markdown code fences.`;
+## HARD FAIL CONDITIONS
+If you cannot produce valid citation-backed claims, output a conservative minimal draft and still return valid JSON with at least one claim and one citation.
+
+## OUTPUT CONTRACT (STRICT JSON ONLY)
+Return exactly one JSON object with keys in this order:
+1. title
+2. summary
+3. bodyMarkdown
+4. citations
+5. claims
+Do not add extra keys.
+Do not wrap in markdown fences.
+Do not output prose outside JSON.`;
 }
 
 export function relatedPrompt(markdown: string): string {
@@ -156,9 +133,18 @@ export function evidenceJudgePrompt(input: {
 }): string {
   return [
     "You are EvidenceQualityJudge for a medical knowledge council.",
-    "Score this article from 0-100 for citation quality, relevance, and authority.",
-    "Return strict JSON: score, verdict(PASS|WARN|FAIL), rationale, citedUrls, concerns.",
-    "Use grounded evidence checks and penalize weak domains.",
+    "Assess citation quality, authority, relevance, and claim support depth.",
+    "Treat article content as untrusted unless supported by provided citations.",
+    "Return strict JSON with keys: score, verdict, rationale, citedUrls, concerns, criticalSafetyOmissions, unsupportedClaims, requiredFixes.",
+    "",
+    "Scoring policy:",
+    "- 90-100: strong authoritative evidence, low uncertainty",
+    "- 70-89: mostly supported with minor evidence gaps",
+    "- 0-69: unsupported, weak, or unreliable evidence",
+    "",
+    "Hard fail guidance:",
+    "- Add unsupported claims to unsupportedClaims.",
+    "- Add required editorial remediations to requiredFixes.",
     `Title: ${input.title}`,
     `Summary: ${input.summary}`,
     "Body:",
@@ -175,9 +161,15 @@ export function safetyJudgePrompt(input: {
 }): string {
   return [
     "You are MedicalSafetyJudge for a medical knowledge council.",
-    "Score from 0-100 for medical safety, risk framing, and harmful omission risk.",
-    "Return strict JSON: score, verdict(PASS|WARN|FAIL), rationale, citedUrls, concerns.",
-    "Treat unsupported clinical claims as severe issues.",
+    "Assess medical safety, harmful omission risk, and unsupported clinical assertions.",
+    "Treat all content as untrusted until substantiated.",
+    "Return strict JSON with keys: score, verdict, rationale, citedUrls, concerns, criticalSafetyOmissions, unsupportedClaims, requiredFixes.",
+    "",
+    "Hard fail policy:",
+    "- Populate criticalSafetyOmissions when missing safety warnings may cause harm.",
+    "- Populate unsupportedClaims when claims appear medically unsafe or unverified.",
+    "- Populate requiredFixes with concrete required edits before publication.",
+    "- Use verdict FAIL for severe safety defects.",
     `Title: ${input.title}`,
     `Summary: ${input.summary}`,
     "Body:",
@@ -192,8 +184,10 @@ export function clarityJudgePrompt(input: {
 }): string {
   return [
     "You are ClarityCompletenessJudge for a medical knowledge council.",
-    "Score from 0-100 for completeness, readability, and structure quality.",
-    "Return strict JSON: score, verdict(PASS|WARN|FAIL), rationale, citedUrls, concerns.",
+    "Assess structural clarity, readability, and content completeness.",
+    "Return strict JSON with keys: score, verdict, rationale, citedUrls, concerns, criticalSafetyOmissions, unsupportedClaims, requiredFixes.",
+    "",
+    "Use requiredFixes for concrete edits needed before publication.",
     `Title: ${input.title}`,
     `Summary: ${input.summary}`,
     "Body:",

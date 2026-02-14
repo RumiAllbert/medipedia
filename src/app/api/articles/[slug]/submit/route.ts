@@ -28,6 +28,19 @@ export async function POST(request: Request, { params }: Params) {
   if (!article) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  if (article.createdById !== authz.session.user.id && authz.session.user.role !== Role.ADMIN) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (
+    article.status !== ArticleStatus.DRAFT &&
+    article.status !== ArticleStatus.AI_DRAFT &&
+    article.status !== ArticleStatus.REJECTED
+  ) {
+    return NextResponse.json(
+      { error: "Only drafts can be submitted for review." },
+      { status: 409 },
+    );
+  }
 
   const updated = await prisma.article.update({
     where: { slug },

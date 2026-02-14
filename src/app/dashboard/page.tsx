@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { ArticleStatus, Role } from "@prisma/client";
 import { NotebookPen, FileText, CheckCircle, Clock, Plus } from "lucide-react";
+import { revalidatePath } from "next/cache";
 
 import { auth } from "@/lib/auth";
 import { hasRole } from "@/lib/auth/roles";
+import { featureFlags } from "@/lib/feature-flags";
 import { prisma } from "@/lib/prisma";
+import { enqueueCouncilReview } from "@/lib/services/agents";
+import { getRiskPrioritizedReviewQueue } from "@/lib/services/review-queue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,14 +18,6 @@ async function getUserArticles(userId: string) {
   return prisma.article.findMany({
     where: { createdById: userId },
     include: { metadata: true },
-    orderBy: { updatedAt: "desc" },
-  });
-}
-
-async function getPendingReviews() {
-  return prisma.article.findMany({
-    where: { status: ArticleStatus.PENDING_REVIEW },
-    include: { metadata: true, createdByUser: { select: { email: true } } },
     orderBy: { updatedAt: "desc" },
   });
 }
@@ -37,11 +33,49 @@ function statusVariant(status: ArticleStatus) {
 
 export default async function DashboardPage() {
   const session = await auth();
-  const user = session!.user!;
+  const user = session?.user;
+  if (!user?.id) {
+    return null;
+  }
   const isReviewer = hasRole(user.role, Role.REVIEWER);
 
-  const articles = await getUserArticles(user.id!);
-  const pendingReviews = isReviewer ? await getPendingReviews() : [];
+  const articles = await getUserArticles(user.id);
+  const reviewQueue =
+    isReviewer && featureFlags.reviewRiskQueue ? await getRiskPrioritizedReviewQueue() : [];
+
+  async function submitForReviewAction(formData: FormData) {
+    "use server";
+
+    const slug = String(formData.get("slug") ?? "");
+    if (!slug) return;
+
+    const actionSession = await auth();
+    const actionUser = actionSession?.user;
+    if (!actionUser?.id || !hasRole(actionUser.role, Role.CONTRIBUTOR)) {
+      return;
+    }
+
+    const article = await prisma.article.findUnique({
+      where: { slug },
+      select: { id: true, createdById: true, status: true },
+    });
+    if (!article) return;
+    if (article.createdById !== actionUser.id && !hasRole(actionUser.role, Role.ADMIN)) return;
+    if (
+      article.status !== ArticleStatus.DRAFT &&
+      article.status !== ArticleStatus.AI_DRAFT &&
+      article.status !== ArticleStatus.REJECTED
+    ) {
+      return;
+    }
+
+    await prisma.article.update({
+      where: { id: article.id },
+      data: { status: ArticleStatus.PENDING_REVIEW },
+    });
+    await enqueueCouncilReview(article.id, "article-submitted");
+    revalidatePath("/dashboard");
+  }
 
   const draftStatuses: ArticleStatus[] = [ArticleStatus.DRAFT, ArticleStatus.AI_DRAFT, ArticleStatus.REJECTED];
   const drafts = articles.filter((a) => draftStatuses.includes(a.status));
@@ -112,20 +146,20 @@ export default async function DashboardPage() {
           <TabsTrigger value="published">My Published ({published.length})</TabsTrigger>
           {isReviewer && (
             <TabsTrigger value="reviews">
-              Pending Review ({pendingReviews.length})
+              Risk Queue ({reviewQueue.length})
             </TabsTrigger>
           )}
         </TabsList>
 
         <TabsContent value="drafts">
-          <ArticleList articles={drafts} showEdit />
+          <ArticleList articles={drafts} showEdit submitForReviewAction={submitForReviewAction} />
         </TabsContent>
         <TabsContent value="published">
           <ArticleList articles={published} />
         </TabsContent>
         {isReviewer && (
           <TabsContent value="reviews">
-            <ArticleList articles={pendingReviews} showReview />
+            <ReviewQueueList queue={reviewQueue} />
           </TabsContent>
         )}
       </Tabs>
@@ -134,12 +168,13 @@ export default async function DashboardPage() {
 }
 
 type ArticleListProps = {
-  articles: Awaited<ReturnType<typeof getUserArticles | typeof getPendingReviews>>;
+  articles: Awaited<ReturnType<typeof getUserArticles>>;
   showEdit?: boolean;
   showReview?: boolean;
+  submitForReviewAction?: (formData: FormData) => Promise<void>;
 };
 
-function ArticleList({ articles, showEdit, showReview }: ArticleListProps) {
+function ArticleList({ articles, showEdit, showReview, submitForReviewAction }: ArticleListProps) {
   if (articles.length === 0) {
     return (
       <Card className="mt-4">
@@ -195,8 +230,10 @@ function ArticleList({ articles, showEdit, showReview }: ArticleListProps) {
                   <Link href={`/dashboard/review/${article.slug}`}>Review</Link>
                 </Button>
               )}
-              {article.status === ArticleStatus.DRAFT && (
-                <SubmitButton slug={article.slug} />
+              {(article.status === ArticleStatus.DRAFT ||
+                article.status === ArticleStatus.AI_DRAFT ||
+                article.status === ArticleStatus.REJECTED) && (
+                <SubmitButton slug={article.slug} submitForReviewAction={submitForReviewAction} />
               )}
             </div>
           </CardContent>
@@ -206,16 +243,77 @@ function ArticleList({ articles, showEdit, showReview }: ArticleListProps) {
   );
 }
 
-function SubmitButton({ slug }: { slug: string }) {
+type ReviewQueueListProps = {
+  queue: Awaited<ReturnType<typeof getRiskPrioritizedReviewQueue>>;
+};
+
+function ReviewQueueList({ queue }: ReviewQueueListProps) {
+  if (!featureFlags.reviewRiskQueue) {
+    return (
+      <Card className="mt-4">
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          Risk queue is disabled. Enable <code>FF_REVIEW_RISK_QUEUE</code> to prioritize review by risk.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (queue.length === 0) {
+    return (
+      <Card className="mt-4">
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          No pending review items.
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <form
-      action={async () => {
-        "use server";
-        await fetch(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/api/articles/${slug}/submit`, {
-          method: "POST",
-        });
-      }}
-    >
+    <div className="mt-4 space-y-3">
+      {queue.map((item) => (
+        <Card key={item.articleId}>
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <Link href={`/articles/${item.slug}`} className="font-medium hover:underline">
+                  {item.title}
+                </Link>
+                <Badge variant={item.riskScore >= 70 ? "destructive" : item.riskScore >= 45 ? "warning" : "neutral"}>
+                  Risk {item.riskScore}
+                </Badge>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                <span>Trust: {item.trustScore}/100</span>
+                <span>Freshness: {item.freshnessScore}/100</span>
+                <span>Open alerts: {item.openAlertCount}</span>
+                <span>Pending since: {new Date(item.pendingSince).toLocaleString()}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Breakdown: drop {item.riskBreakdown.trustDropMagnitude} + freshness {item.riskBreakdown.lowFreshnessPenalty} + alerts {item.riskBreakdown.openAlertsPenalty} + age {item.riskBreakdown.pendingAgePenalty}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/dashboard/review/${item.slug}`}>Review</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function SubmitButton({
+  slug,
+  submitForReviewAction,
+}: {
+  slug: string;
+  submitForReviewAction?: (formData: FormData) => Promise<void>;
+}) {
+  if (!submitForReviewAction) return null;
+
+  return (
+    <form action={submitForReviewAction}>
+      <input type="hidden" name="slug" value={slug} />
       <Button type="submit" variant="secondary" size="sm">
         Submit for review
       </Button>

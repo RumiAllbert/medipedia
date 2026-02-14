@@ -12,7 +12,6 @@ import {
   List,
   Code,
   Save,
-  Send,
   Eye,
   Edit,
   Plus,

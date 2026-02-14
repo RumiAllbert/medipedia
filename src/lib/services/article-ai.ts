@@ -1,3 +1,4 @@
+import { differenceInDays } from "date-fns";
 import { ArticleStatus, GenerationJobStatus } from "@prisma/client";
 
 import {
@@ -5,16 +6,19 @@ import {
   metadataSchema,
   relatedCandidatesSchema,
   type GeneratedArticlePayload,
+  type GeneratedClaimPayload,
   type MetadataPayload,
   type RelatedCandidate,
 } from "@/lib/ai/contracts";
-import { generateGroundedJson, type GroundingChunk } from "@/lib/ai/gemini";
+import { generateGroundedJson } from "@/lib/ai/gemini";
 import {
   articlePrompt,
   DEFAULT_GEMINI_MODEL,
   metadataPrompt,
+  PROMPT_TEMPLATE,
   relatedPrompt,
 } from "@/lib/ai/prompts";
+import { featureFlags } from "@/lib/feature-flags";
 import { prisma } from "@/lib/prisma";
 import { runCouncilForArticle } from "@/lib/services/council";
 import { toSlug } from "@/lib/slug";
@@ -39,72 +43,55 @@ function fallbackMetadata(title: string): MetadataPayload {
 }
 
 function fallbackArticle(topicTitle: string): GeneratedArticlePayload {
+  const citations = [
+    {
+      title: "World Health Organization - Health Topics",
+      url: "https://www.who.int/health-topics",
+      sourceType: "public-health",
+      publishedAt: null,
+    },
+    {
+      title: "MedlinePlus - National Library of Medicine",
+      url: "https://medlineplus.gov/",
+      sourceType: "government",
+      publishedAt: null,
+    },
+    {
+      title: "Centers for Disease Control and Prevention",
+      url: "https://www.cdc.gov/",
+      sourceType: "government",
+      publishedAt: null,
+    },
+  ];
+
   return {
     title: topicTitle,
     summary: `${topicTitle} is a health topic requiring comprehensive medical review. This article is a preliminary draft generated while editorial review is in progress. Readers should consult qualified healthcare providers for guidance specific to their situation.`,
     bodyMarkdown: `## Overview
 
-**${topicTitle}** is a topic within health and medicine that warrants careful, evidence-based discussion. This article provides a preliminary overview based on current medical knowledge and established clinical guidelines. As with all health information, the content presented here is educational in nature and does not substitute for professional medical advice.
+**${topicTitle}** is a topic within health and medicine that warrants careful, evidence-based discussion. This article provides a preliminary overview based on current medical knowledge and established clinical guidelines.
 
-The information in this article is drawn from major medical organizations and peer-reviewed sources. It is intended for a general audience seeking to understand key concepts, current evidence, and clinical significance related to ${topicTitle.toLowerCase()}.
+## Evidence and Safety Notes
 
-## Background and Context
+This content is educational and not a substitute for professional care. Evidence quality can vary by subtopic, and recommendations may change as new research emerges.
 
-${topicTitle} is an area of active medical research and clinical practice. Understanding this topic requires considering the interplay of biological mechanisms, clinical evidence, population health data, and individual patient factors.
+## Next Steps for Review
 
-Healthcare organizations such as the World Health Organization (WHO), the National Institutes of Health (NIH), and specialty medical societies publish guidelines and educational resources related to this topic. These authoritative sources form the foundation of evidence-based practice and inform clinical decision-making.
-
-## Key Considerations
-
-Several important factors are relevant when evaluating information about ${topicTitle.toLowerCase()}:
-
-- **Evidence base**: The strength of available evidence varies across different aspects of this topic. Some areas are supported by robust randomized controlled trials, while others rely on observational studies or expert consensus.
-- **Individual variation**: Health outcomes and appropriate interventions can vary significantly between individuals based on age, genetics, comorbidities, and other factors.
-- **Evolving knowledge**: Medical understanding continues to advance, and recommendations may be updated as new research emerges.
-- **Multidisciplinary approach**: Optimal management often involves collaboration between different healthcare specialties and disciplines.
-
-## Clinical Significance
-
-Understanding ${topicTitle.toLowerCase()} is important for both healthcare providers and patients. Awareness of current evidence, risk factors, and available interventions supports informed decision-making and improved health outcomes.
-
-Patients and caregivers are encouraged to discuss questions about ${topicTitle.toLowerCase()} with their healthcare team, who can provide personalized guidance based on individual circumstances and the most current clinical evidence.
-
-## Current Guidelines and Recommendations
-
-Major medical organizations periodically issue and update guidelines related to this topic. These guidelines are based on systematic reviews of available evidence and expert consensus. Readers should refer to the most recent publications from relevant specialty organizations for the latest recommendations.
-
-> **Note**: This article is a preliminary draft pending full editorial review. Content will be expanded and refined by medical reviewers to ensure accuracy, completeness, and adherence to current evidence-based standards.
+This draft is designed for medical editorial review. Reviewers should verify claims, strengthen citations, and ensure section-level safety framing before publication.
 `,
-    citations: [
+    citations,
+    claims: [
       {
-        title: "World Health Organization - Health Topics",
-        url: "https://www.who.int/health-topics",
-        sourceType: "public-health",
-        publishedAt: null,
+        claimText: `${topicTitle} requires evidence-based review before publication decisions are made.`,
+        sectionHeading: "Overview",
+        citationUrls: [citations[0].url],
+        supportLevel: "SUPPORTED",
       },
       {
-        title: "MedlinePlus - National Library of Medicine",
-        url: "https://medlineplus.gov/",
-        sourceType: "government",
-        publishedAt: null,
-      },
-      {
-        title: "Centers for Disease Control and Prevention",
-        url: "https://www.cdc.gov/",
-        sourceType: "government",
-        publishedAt: null,
-      },
-      {
-        title: "National Institutes of Health",
-        url: "https://www.nih.gov/health-information",
-        sourceType: "government",
-        publishedAt: null,
-      },
-      {
-        title: "Cochrane Library - Trusted Evidence",
-        url: "https://www.cochranelibrary.com/",
-        sourceType: "clinical-database",
-        publishedAt: null,
+        claimText: "Educational health content should not replace personalized clinical advice.",
+        sectionHeading: "Evidence and Safety Notes",
+        citationUrls: [citations[1].url],
+        supportLevel: "SUPPORTED",
       },
     ],
   };
@@ -118,6 +105,166 @@ function fallbackRelated(): RelatedCandidate[] {
   ];
 }
 
+function normalizeUrl(url: string): string {
+  return url.trim();
+}
+
+function supportLevelToConfidence(supportLevel: GeneratedClaimPayload["supportLevel"]): number {
+  if (supportLevel === "SUPPORTED") return 85;
+  if (supportLevel === "PARTIAL") return 62;
+  return 30;
+}
+
+function supportLevelToSupportType(supportLevel: GeneratedClaimPayload["supportLevel"]): string {
+  if (supportLevel === "SUPPORTED") return "supports";
+  if (supportLevel === "PARTIAL") return "partial";
+  return "contradicted";
+}
+
+function citationFreshnessDays(publishedAt: Date | null): number | null {
+  if (!publishedAt) return null;
+  return Math.max(0, differenceInDays(new Date(), publishedAt));
+}
+
+function ensureClaims(
+  payload: GeneratedArticlePayload,
+  topicTitle: string,
+  availableCitationUrls: string[],
+): GeneratedClaimPayload[] {
+  const citationUrlSet = new Set(availableCitationUrls.map(normalizeUrl));
+
+  const normalizedClaims = (payload.claims ?? [])
+    .map((claim) => {
+      const claimText = claim.claimText.trim();
+      if (!claimText) return null;
+
+      const citationUrls = Array.from(
+        new Set(
+          claim.citationUrls
+            .map(normalizeUrl)
+            .filter((url) => citationUrlSet.has(url)),
+        ),
+      );
+
+      return {
+        claimText,
+        sectionHeading: claim.sectionHeading.trim() || "Overview",
+        citationUrls,
+        supportLevel: claim.supportLevel,
+      } satisfies GeneratedClaimPayload;
+    })
+    .filter((claim): claim is GeneratedClaimPayload => Boolean(claim));
+
+  const enrichedClaims = normalizedClaims.map((claim) => ({
+    ...claim,
+    citationUrls:
+      claim.citationUrls.length > 0
+        ? claim.citationUrls
+        : availableCitationUrls.length > 0
+          ? [availableCitationUrls[0]]
+          : [],
+  }));
+
+  if (enrichedClaims.length > 0) {
+    return enrichedClaims;
+  }
+
+  if (availableCitationUrls.length === 0) {
+    return [
+      {
+        claimText: `${topicTitle} is included as a preliminary draft pending citation-backed review.`,
+        sectionHeading: "Overview",
+        citationUrls: [],
+        supportLevel: "PARTIAL",
+      },
+    ];
+  }
+
+  return [
+    {
+      claimText: `${topicTitle} content requires human medical review before publication.`,
+      sectionHeading: "Overview",
+      citationUrls: [availableCitationUrls[0]],
+      supportLevel: "SUPPORTED",
+    },
+  ];
+}
+
+async function persistClaims(
+  articleId: string,
+  claims: GeneratedClaimPayload[],
+  citations: Array<{ id: string; url: string }>,
+): Promise<void> {
+  const citationIdByUrl = new Map(citations.map((citation) => [normalizeUrl(citation.url), citation.id]));
+  const fallbackCitationId = citations[0]?.id;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.articleClaim.deleteMany({ where: { articleId } });
+
+    for (let index = 0; index < claims.length; index += 1) {
+      const claim = claims[index];
+      const createdClaim = await tx.articleClaim.create({
+        data: {
+          articleId,
+          sectionHeading: claim.sectionHeading,
+          claimText: claim.claimText,
+          confidence: supportLevelToConfidence(claim.supportLevel),
+          orderIndex: index,
+        },
+      });
+
+      const citationIds = Array.from(
+        new Set(
+          claim.citationUrls
+            .map((url) => citationIdByUrl.get(normalizeUrl(url)))
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+      if (citationIds.length === 0 && fallbackCitationId) {
+        citationIds.push(fallbackCitationId);
+      }
+
+      if (citationIds.length > 0) {
+        await tx.claimCitation.createMany({
+          data: citationIds.map((citationId) => ({
+            claimId: createdClaim.id,
+            citationId,
+            supportType: supportLevelToSupportType(claim.supportLevel),
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+  });
+}
+
+async function persistGenerationPromptRun(input: {
+  generationJobId: string;
+  articleId: string;
+  model: string;
+  rawResponseRef: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  latencyMs: number;
+}): Promise<void> {
+  if (!featureFlags.promptTraceability) return;
+
+  await prisma.promptRun.create({
+    data: {
+      kind: "article_generation",
+      templateKey: PROMPT_TEMPLATE.articleGeneration.key,
+      templateVersion: PROMPT_TEMPLATE.articleGeneration.version,
+      model: input.model,
+      rawResponseRef: input.rawResponseRef,
+      inputTokens: input.inputTokens,
+      outputTokens: input.outputTokens,
+      latencyMs: input.latencyMs,
+      generationJobId: input.generationJobId,
+      articleId: input.articleId,
+    },
+  });
+}
+
 export async function enrichArticleMetadata(articleId: string): Promise<void> {
   const article = await prisma.article.findUnique({ where: { id: articleId } });
   if (!article) return;
@@ -126,7 +273,7 @@ export async function enrichArticleMetadata(articleId: string): Promise<void> {
     prompt: metadataPrompt(article.bodyMarkdown),
     schema: metadataSchema,
     grounded: true,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 2048,
   });
   const metadata = generated.data ?? fallbackMetadata(article.title);
 
@@ -164,7 +311,7 @@ export async function rebuildRelatedGraph(articleId: string): Promise<void> {
     prompt: relatedPrompt(article.bodyMarkdown),
     schema: relatedCandidatesSchema,
     grounded: false,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 2048,
   });
   const candidates = (generated.data ?? fallbackRelated()).slice(0, 6);
   const targetSlugs = candidates.map((candidate) => toSlug(candidate.targetTitle));
@@ -233,6 +380,7 @@ export async function enqueueGenerationJob(input: {
     };
   }
 
+  const promptVersion = `v${PROMPT_TEMPLATE.articleGeneration.version}`;
   const job = await prisma.generationJob.create({
     data: {
       sourceArticleId: input.sourceArticleId,
@@ -243,6 +391,7 @@ export async function enqueueGenerationJob(input: {
       phase: "QUEUED",
       progress: 0,
       model: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+      promptVersion,
     },
   });
 
@@ -254,24 +403,40 @@ export async function enqueueGenerationJob(input: {
 }
 
 export async function processGenerationJob(jobId: string): Promise<void> {
-  const job = await prisma.generationJob.findUnique({ where: { id: jobId } });
+  let job = await prisma.generationJob.findUnique({ where: { id: jobId } });
   if (!job) return;
   if (job.status === GenerationJobStatus.SUCCEEDED || job.status === GenerationJobStatus.FAILED) {
     return;
   }
-  if (job.status === GenerationJobStatus.RUNNING && job.startedAt && job.phase !== "DEQUEUED") {
+
+  if (job.status === GenerationJobStatus.QUEUED) {
+    const claim = await prisma.generationJob.updateMany({
+      where: { id: job.id, status: GenerationJobStatus.QUEUED },
+      data: {
+        status: GenerationJobStatus.RUNNING,
+        phase: "GENERATING_ARTICLE",
+        progress: 25,
+        startedAt: job.startedAt ?? new Date(),
+        errorMessage: null,
+      },
+    });
+    if (claim.count === 0) return;
+  } else if (job.status === GenerationJobStatus.RUNNING && job.phase === "DEQUEUED") {
+    const claim = await prisma.generationJob.updateMany({
+      where: { id: job.id, status: GenerationJobStatus.RUNNING, phase: "DEQUEUED" },
+      data: {
+        phase: "GENERATING_ARTICLE",
+        progress: 25,
+        startedAt: job.startedAt ?? new Date(),
+        errorMessage: null,
+      },
+    });
+    if (claim.count === 0) return;
+  } else {
     return;
   }
-
-  await prisma.generationJob.update({
-    where: { id: job.id },
-    data: {
-      status: GenerationJobStatus.RUNNING,
-      phase: "GENERATING_ARTICLE",
-      progress: 25,
-      startedAt: job.startedAt ?? new Date(),
-    },
-  });
+  job = await prisma.generationJob.findUnique({ where: { id: jobId } });
+  if (!job) return;
 
   try {
     const siblingWithArticle = await prisma.generationJob.findFirst({
@@ -317,31 +482,50 @@ export async function processGenerationJob(jobId: string): Promise<void> {
       ? (await prisma.article.findUnique({ where: { id: job.sourceArticleId } }))?.summary
       : undefined;
 
+    const generationStartedAt = Date.now();
     const generated = await generateGroundedJson({
       prompt: articlePrompt(job.topicTitle, sourceContext),
       schema: generatedArticleSchema,
       grounded: true,
       maxOutputTokens: 8192,
     });
-    const payload = generated.data ?? fallbackArticle(job.topicTitle);
+    const generationLatency = Date.now() - generationStartedAt;
+    const initialPayload = generated.data ?? fallbackArticle(job.topicTitle);
 
-    // Merge Google Search grounding chunks into citations as verified sources
-    const aiCitations = payload.citations.map((citation) => ({
-      title: citation.title,
-      url: citation.url,
-      sourceType: citation.sourceType,
-      publishedAt: citation.publishedAt ? new Date(citation.publishedAt) : null,
-    }));
-    const existingUrls = new Set(aiCitations.map((c) => c.url));
-    const groundedCitations = generated.groundingChunks
-      .filter((chunk: GroundingChunk) => !existingUrls.has(chunk.uri))
-      .map((chunk: GroundingChunk) => ({
-        title: chunk.title,
-        url: chunk.uri,
-        sourceType: "google-search-grounding" as string,
-        publishedAt: null,
-      }));
-    const allCitations = [...aiCitations, ...groundedCitations];
+    const aiCitations = initialPayload.citations.map((citation) => {
+      const publishedAt = citation.publishedAt ? new Date(citation.publishedAt) : null;
+      return {
+        title: citation.title,
+        url: normalizeUrl(citation.url),
+        sourceType: citation.sourceType,
+        publishedAt,
+        freshnessDays: citationFreshnessDays(publishedAt),
+      };
+    });
+    const citationByUrl = new Map(aiCitations.map((citation) => [citation.url, citation]));
+    for (const chunk of generated.groundingChunks) {
+      if (!citationByUrl.has(chunk.uri)) {
+        citationByUrl.set(chunk.uri, {
+          title: chunk.title,
+          url: chunk.uri,
+          sourceType: "google-search-grounding",
+          publishedAt: null,
+          freshnessDays: null,
+        });
+      }
+    }
+    const allCitations = Array.from(citationByUrl.values());
+
+    const payload: GeneratedArticlePayload = {
+      ...initialPayload,
+      citations: allCitations.map((citation) => ({
+        title: citation.title,
+        url: citation.url,
+        sourceType: citation.sourceType,
+        publishedAt: citation.publishedAt ? citation.publishedAt.toISOString() : null,
+      })),
+      claims: ensureClaims(initialPayload, job.topicTitle, allCitations.map((citation) => citation.url)),
+    };
 
     const article = await prisma.article.create({
       data: {
@@ -367,6 +551,26 @@ export async function processGenerationJob(jobId: string): Promise<void> {
           },
         },
       },
+      include: {
+        citations: {
+          select: {
+            id: true,
+            url: true,
+          },
+        },
+      },
+    });
+
+    await persistClaims(article.id, payload.claims, article.citations);
+
+    await persistGenerationPromptRun({
+      generationJobId: job.id,
+      articleId: article.id,
+      model: job.model,
+      rawResponseRef: `generation-job:${job.id}`,
+      inputTokens: generated.inputTokens,
+      outputTokens: generated.outputTokens,
+      latencyMs: generationLatency,
     });
 
     await prisma.generationJob.update({
@@ -396,6 +600,7 @@ export async function processGenerationJob(jobId: string): Promise<void> {
         progress: 100,
         generatedArticleId: article.id,
         rawResponse: generated.rawText,
+        promptVersion: job.promptVersion ?? `v${PROMPT_TEMPLATE.articleGeneration.version}`,
         finishedAt: new Date(),
       },
     });

@@ -49,10 +49,13 @@ export async function PUT(
     });
 
     return NextResponse.json({ data: updatedUser });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error updating user role:", error);
 
-    if (error?.code === "P2025") {
+    const code = typeof error === "object" && error !== null && "code" in error
+      ? (error as { code?: string }).code
+      : undefined;
+    if (code === "P2025") {
       return NextResponse.json(
         { error: "User not found" },
         { status: 404 }

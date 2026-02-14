@@ -30,7 +30,7 @@ export function OrbisGraph() {
     setTrustRange,
   } = useOrbisData();
 
-  const { positions, reheat, pinNode, unpinNode, heatOnDrag, coolAfterDrag } =
+  const { positions, reheat, pinNode, heatOnDrag, coolAfterDrag } =
     useForceSimulation(filteredData, dimensions.width, dimensions.height);
 
   const zoomRef = useRef<{
@@ -126,7 +126,6 @@ export function OrbisGraph() {
               onHoverNode={setHoveredNodeId}
               onDoubleClickNode={handleDoubleClick}
               pinNode={pinNode}
-              unpinNode={unpinNode}
               heatOnDrag={heatOnDrag}
               coolAfterDrag={coolAfterDrag}
               zoomRef={zoomRef}

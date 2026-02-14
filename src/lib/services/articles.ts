@@ -1,12 +1,38 @@
-import { ArticleStatus, Prisma } from "@prisma/client";
+import { ArticleStatus, Prisma, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { toSlug } from "@/lib/slug";
+import { hasRole } from "@/lib/auth/roles";
 
 export const articleInclude = {
   metadata: true,
   citations: true,
   outgoingRelated: {
     orderBy: { score: "desc" as const },
+  },
+} satisfies Prisma.ArticleInclude;
+
+export const articleDetailInclude = {
+  ...articleInclude,
+  claims: {
+    orderBy: { orderIndex: "asc" as const },
+    include: {
+      citations: {
+        include: {
+          citation: true,
+        },
+      },
+    },
+  },
+  promptRuns: {
+    orderBy: { createdAt: "desc" as const },
+    take: 12,
+  },
+  councilRuns: {
+    orderBy: { createdAt: "desc" as const },
+    take: 6,
+    include: {
+      judgeResults: true,
+    },
   },
 } satisfies Prisma.ArticleInclude;
 
@@ -32,38 +58,42 @@ export async function listPublishedArticles(query?: string) {
 export async function getArticleBySlug(slug: string) {
   return prisma.article.findUnique({
     where: { slug },
-    include: articleInclude,
+    include: articleDetailInclude,
   });
+}
+
+export function visibleArticleWhere(input: {
+  slug: string;
+  viewerId?: string;
+  viewerRole?: Role;
+}): Prisma.ArticleWhereInput {
+  if (hasRole(input.viewerRole, Role.REVIEWER)) {
+    return { slug: input.slug };
+  }
+
+  return {
+    slug: input.slug,
+    OR: [
+      { status: ArticleStatus.PUBLISHED },
+      ...(input.viewerId
+        ? [
+            {
+              createdById: input.viewerId,
+            },
+          ]
+        : []),
+    ],
+  };
 }
 
 export async function getVisibleArticleBySlug(input: {
   slug: string;
-  includeDrafts: boolean;
   viewerId?: string;
+  viewerRole?: Role;
 }) {
-  if (input.includeDrafts) {
-    return prisma.article.findUnique({
-      where: { slug: input.slug },
-      include: articleInclude,
-    });
-  }
-
   return prisma.article.findFirst({
-    where: {
-      slug: input.slug,
-      OR: [
-        { status: ArticleStatus.PUBLISHED },
-        ...(input.viewerId
-          ? [
-              {
-                status: ArticleStatus.AI_DRAFT,
-                createdById: input.viewerId,
-              },
-            ]
-          : []),
-      ],
-    },
-    include: articleInclude,
+    where: visibleArticleWhere(input),
+    include: articleDetailInclude,
   });
 }
 

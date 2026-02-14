@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth/guard";
 import { Role, SourceTier } from "@prisma/client";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const authResult = await requireRole(Role.ADMIN);
   if (!authResult.ok) {
     return authResult.response;

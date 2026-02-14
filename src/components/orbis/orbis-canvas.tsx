@@ -15,7 +15,6 @@ type OrbisCanvasProps = {
   onHoverNode: (id: string | null) => void;
   onDoubleClickNode: (id: string) => void;
   pinNode: (id: string, x: number, y: number) => void;
-  unpinNode: (id: string) => void;
   heatOnDrag: () => void;
   coolAfterDrag: () => void;
   zoomRef: React.MutableRefObject<{
@@ -67,7 +66,6 @@ export function OrbisCanvas({
   onHoverNode,
   onDoubleClickNode,
   pinNode,
-  unpinNode,
   heatOnDrag,
   coolAfterDrag,
   zoomRef,
@@ -77,7 +75,9 @@ export function OrbisCanvas({
   const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
   const zoomBehaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const transformRef = useRef(transform);
-  transformRef.current = transform;
+  useEffect(() => {
+    transformRef.current = transform;
+  }, [transform]);
 
   // Track drag state in a ref so pointer handlers stay stable
   const dragRef = useRef<{ nodeId: string; dragged: boolean } | null>(null);

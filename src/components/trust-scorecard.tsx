@@ -43,6 +43,13 @@ type TrustScorecardProps = {
   confidenceLabel: string;
   lastReviewedAt?: Date | null;
   nextReviewAt?: Date | null;
+  freshnessBadges?: Array<{ label: string; days: number | null }>;
+  evidenceTierSummary?: {
+    tierA: number;
+    tierB: number;
+    tierC: number;
+    unknown: number;
+  };
 };
 
 export function TrustScorecard({
@@ -53,7 +60,18 @@ export function TrustScorecard({
   confidenceLabel,
   lastReviewedAt,
   nextReviewAt,
+  freshnessBadges,
+  evidenceTierSummary,
 }: TrustScorecardProps) {
+  const badges = freshnessBadges ?? [];
+
+  function freshnessVariant(days: number | null): "success" | "warning" | "destructive" | "neutral" {
+    if (days == null) return "neutral";
+    if (days <= 180) return "success";
+    if (days <= 365) return "warning";
+    return "destructive";
+  }
+
   return (
     <Card className="glass-strong rounded-2xl">
       <CardHeader className="pb-3">
@@ -78,6 +96,27 @@ export function TrustScorecard({
           <p className="text-xs text-muted-foreground">
             Next review: {new Date(nextReviewAt).toLocaleDateString()}
           </p>
+        )}
+        {evidenceTierSummary && (
+          <div className="rounded-xl border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">Evidence tiers</p>
+            <p className="mt-1">
+              A: {evidenceTierSummary.tierA} · B: {evidenceTierSummary.tierB} · C: {evidenceTierSummary.tierC}
+              {evidenceTierSummary.unknown > 0 ? ` · Unknown: ${evidenceTierSummary.unknown}` : ""}
+            </p>
+          </div>
+        )}
+        {badges.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-foreground">Citation freshness</p>
+            <div className="flex flex-wrap gap-1.5">
+              {badges.slice(0, 8).map((badge) => (
+                <Badge key={`${badge.label}-${badge.days ?? "na"}`} variant={freshnessVariant(badge.days)}>
+                  {badge.label}: {badge.days == null ? "unknown" : `${badge.days}d`}
+                </Badge>
+              ))}
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

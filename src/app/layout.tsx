@@ -31,6 +31,22 @@ const bodyFont = Source_Sans_3({
 export const metadata: Metadata = {
   title: "Medipedia",
   description: "A safety-first health encyclopedia powered by Lumi with council scoring",
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-touch-icon.png",
+  },
+  openGraph: {
+    title: "Medipedia",
+    description: "A safety-first health encyclopedia powered by Lumi with council scoring",
+    images: ["/og-image.png"],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Medipedia",
+    description: "A safety-first health encyclopedia powered by Lumi with council scoring",
+    images: ["/og-image.png"],
+  },
 };
 
 export default async function RootLayout({

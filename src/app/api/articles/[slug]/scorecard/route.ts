@@ -1,9 +1,8 @@
-import { ArticleStatus, Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
-import { hasRole } from "@/lib/auth/roles";
 import { prisma } from "@/lib/prisma";
+import { visibleArticleWhere } from "@/lib/services/articles";
 import { latestCouncilRunForArticle } from "@/lib/services/council";
 
 type Params = {
@@ -13,28 +12,13 @@ type Params = {
 export async function GET(_: Request, { params }: Params) {
   const { slug } = await params;
   const session = await auth();
-  const includeDrafts = hasRole(session?.user?.role, Role.CONTRIBUTOR);
-  const viewerId = session?.user?.id;
 
   const article = await prisma.article.findFirst({
-    where: {
+    where: visibleArticleWhere({
       slug,
-      ...(includeDrafts
-        ? {}
-        : {
-            OR: [
-              { status: ArticleStatus.PUBLISHED },
-              ...(viewerId
-                ? [
-                    {
-                      status: ArticleStatus.AI_DRAFT,
-                      createdById: viewerId,
-                    },
-                  ]
-                : []),
-            ],
-          }),
-    },
+      viewerId: session?.user?.id,
+      viewerRole: session?.user?.role,
+    }),
     select: {
       id: true,
       slug: true,

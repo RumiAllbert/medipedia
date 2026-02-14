@@ -66,6 +66,20 @@ enum ReviewAlertStatus {
   RESOLVED
 }
 
+enum ContentReportType {
+  ACCURACY
+  SAFETY
+  OUTDATED
+  OTHER
+}
+
+enum ContentReportStatus {
+  OPEN
+  TRIAGED
+  RESOLVED
+  DISMISSED
+}
+
 model User {
   id             String          @id @default(cuid())
   name           String?
@@ -79,6 +93,7 @@ model User {
   sessions       Session[]
   authenticators Authenticator[]
   reviews        Review[]
+  reports        ContentReport[] @relation("ReportedByUser")
   authored       Article[]       @relation("ArticleAuthor")
   requestedJobs  GenerationJob[] @relation("RequestedByUser")
 }
@@ -164,6 +179,12 @@ model Article {
   generatedByJobs   GenerationJob[]      @relation("GeneratedArticle")
   councilRuns       CouncilRun[]
   reviewAlerts      ReviewAlert[]
+  claims            ArticleClaim[]
+  promptRuns        PromptRun[]
+  reports           ContentReport[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([nextReviewAt])
 }
 
 model ArticleMetadata {
@@ -188,7 +209,9 @@ model Citation {
   url         String
   sourceType  String
   publishedAt DateTime?
+  freshnessDays Int?
   article     Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  claimCitations ClaimCitation[]
 }
 
 model ArticleRevision {
@@ -245,6 +268,7 @@ model GenerationJob {
   phase              String              @default("QUEUED")
   progress           Int                 @default(0)
   model              String
+  promptVersion      String?
   errorMessage       String?
   rawResponse        String?
   generatedArticleId String?
@@ -255,9 +279,11 @@ model GenerationJob {
   sourceArticle      Article?            @relation("SourceArticle", fields: [sourceArticleId], references: [id], onDelete: SetNull)
   generatedArticle   Article?            @relation("GeneratedArticle", fields: [generatedArticleId], references: [id], onDelete: SetNull)
   requestedBy        User?               @relation("RequestedByUser", fields: [requestedById], references: [id], onDelete: SetNull)
+  promptRuns         PromptRun[]
 
   @@index([topicSlug, status])
   @@index([status, createdAt])
+  @@index([status, updatedAt])
 }
 
 model SourceDomainPolicy {
@@ -278,12 +304,15 @@ model CouncilRun {
   aggregateScore   Int               @default(0)
   breakdownJson    Json
   publishEligible  Boolean           @default(false)
+  promptVersion    String?
+  policyVersion    String?
   failureReason    String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   article          Article           @relation(fields: [articleId], references: [id], onDelete: Cascade)
   articleRevision  ArticleRevision?  @relation(fields: [articleRevisionId], references: [id], onDelete: SetNull)
   judgeResults     CouncilJudgeResult[]
+  promptRuns       PromptRun[]
 
   @@index([articleId, createdAt])
 }
@@ -319,6 +348,7 @@ model AgentJob {
   updatedAt  DateTime       @updatedAt
 
   @@index([status, runAt])
+  @@index([status, runAt, updatedAt])
 }
 
 model ReviewAlert {
@@ -332,5 +362,85 @@ model ReviewAlert {
   resolvedAt        DateTime?
   article           Article           @relation(fields: [articleId], references: [id], onDelete: Cascade)
 
+  @@index([articleId, status])
+  @@index([status, createdAt])
+}
+
+model PromptTemplate {
+  id        String   @id @default(cuid())
+  key       String
+  version   Int
+  body      String
+  active    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([key, version])
+  @@index([key, active])
+}
+
+model PromptRun {
+  id              String         @id @default(cuid())
+  kind            String
+  templateKey     String
+  templateVersion Int
+  model           String
+  rawResponseRef  String?
+  inputTokens     Int?
+  outputTokens    Int?
+  latencyMs       Int?
+  articleId       String?
+  generationJobId String?
+  councilRunId    String?
+  createdAt       DateTime       @default(now())
+  article         Article?       @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  generationJob   GenerationJob? @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+  councilRun      CouncilRun?    @relation(fields: [councilRunId], references: [id], onDelete: SetNull)
+
+  @@index([articleId, createdAt])
+  @@index([generationJobId, createdAt])
+  @@index([councilRunId, createdAt])
+}
+
+model ArticleClaim {
+  id            String         @id @default(cuid())
+  articleId     String
+  sectionHeading String
+  claimText     String
+  confidence    Int
+  orderIndex    Int
+  createdAt     DateTime       @default(now())
+  article       Article        @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  citations     ClaimCitation[]
+
+  @@index([articleId, orderIndex])
+}
+
+model ClaimCitation {
+  id         String       @id @default(cuid())
+  claimId    String
+  citationId String
+  supportType String      @default("supports")
+  createdAt  DateTime     @default(now())
+  claim      ArticleClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  citation   Citation     @relation(fields: [citationId], references: [id], onDelete: Cascade)
+
+  @@unique([claimId, citationId])
+  @@index([claimId, citationId])
+}
+
+model ContentReport {
+  id         String              @id @default(cuid())
+  articleId  String
+  reporterId String?
+  type       ContentReportType
+  details    String
+  status     ContentReportStatus @default(OPEN)
+  createdAt  DateTime            @default(now())
+  resolvedAt DateTime?
+  article    Article             @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  reporter   User?               @relation("ReportedByUser", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
   @@index([articleId, status])
 }

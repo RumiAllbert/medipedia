@@ -18,17 +18,19 @@ Medipedia combines grounded AI generation (Google Gemini) with a transparent tru
 
 ### AI Generation
 
-- **Lumi** -- topic-adaptive article generator that classifies topics (condition, procedure, drug class, anatomy, etc.) and tailors section structure accordingly
+- **Lumi** -- topic-adaptive article generator with strict claim-to-citation output contracts
 - Async generation queue with progress polling (`QUEUED` -> `RUNNING` -> `SUCCEEDED`)
 - Automatic metadata enrichment: SEO fields, entity extraction, safety flags, reading level
+- Prompt telemetry via `PromptRun` (template version, model, token usage, latency)
 - Deterministic fallback content when Gemini is unavailable
 
 ### Trust & Quality
 
-- **Council voting** -- three parallel judges (Clarity, Evidence, Safety) each return a score, verdict (`PASS` / `WARN` / `FAIL`), rationale, and cited sources
+- **Council voting** -- three parallel judges (Clarity, Evidence, Safety) each return a score, verdict (`PASS` / `WARN` / `FAIL`), rationale, and strict safety/unsupported-claim signals
 - **Source gate** -- domain tier policy (A / B / C) enforces minimum citation quality before publication
-- **Trust scorecard** -- per-article breakdown showing aggregate score, judge verdicts, citation freshness, and source tiers
+- **Trust scorecard + timeline** -- per-article breakdown showing aggregate score, judge verdicts, citation freshness, source tiers, and trust events
 - **Review alerts** -- automatic alerts when trust scores change, surfaced in the admin dashboard
+- **Claim traceability** -- claim cards map article assertions to supporting citations
 
 ### Roles & Workflow
 
@@ -89,10 +91,15 @@ Edit `.env` with your values:
 | `DATABASE_URL` | Yes | PostgreSQL connection string (default points to Docker) |
 | `AUTH_SECRET` | Yes | Random secret for JWT signing (`openssl rand -base64 32`) |
 | `GEMINI_API_KEY` | No | Google Gemini API key -- fallback content used if absent |
-| `GEMINI_MODEL` | No | Model name (default: `gemini-3-flash-preview`) |
+| `GEMINI_MODEL` | No | Model name (default: `gemini-3-pro-preview`) |
 | `EMAIL_SERVER` | No | SMTP connection string for magic link emails |
 | `EMAIL_FROM` | No | Sender address for auth emails |
 | `AGENT_TICK_SECRET` | No | Shared secret for the agent tick endpoint |
+| `FF_PROMPT_TRACEABILITY` | No | Enable prompt/model run traceability writes |
+| `FF_TRUST_TIMELINE` | No | Enable trust timeline API/UI |
+| `FF_REVIEW_RISK_QUEUE` | No | Enable risk-prioritized review queue |
+| `FF_ADMIN_JOBS_CONSOLE` | No | Enable admin jobs console APIs/UI |
+| `FF_ARTICLE_REPORTING` | No | Enable article issue reporting |
 
 ### 3. Start PostgreSQL
 
@@ -108,6 +115,12 @@ docker compose up -d
 npm run prisma:generate
 npm run prisma:migrate -- --name init
 ```
+
+For mega-rollout environments:
+
+1. Apply Phase A migration first (`20260214201000_mega_rollout_phase_a`).
+2. Run `npm run db:backfill-traceability`.
+3. Apply Phase B constraints migration (`20260214224500_mega_rollout_phase_b_constraints`).
 
 ### 5. Seed demo data
 
@@ -184,6 +197,8 @@ medipedia/
 | `PUT` | `/api/articles/:slug` | Author/Admin | Update article (creates revision) |
 | `POST` | `/api/articles/:slug/submit` | Author | Submit draft for review |
 | `GET` | `/api/articles/:slug/scorecard` | Public | Trust score breakdown + council details |
+| `GET` | `/api/articles/:slug/timeline` | Public | Trust timeline events |
+| `POST` | `/api/articles/:slug/report` | Public/Auth | Report issue for an article |
 | `GET` | `/api/articles/:slug/related` | Public | Related article suggestions |
 | `GET` | `/api/articles/:slug/revisions` | Public | Revision history |
 | `GET` | `/api/articles/search?q=` | Public | Search articles |
@@ -198,6 +213,7 @@ medipedia/
 | `POST` | `/api/reviews/:articleId/approve` | Reviewer+ | Approve article (validates council gate) |
 | `POST` | `/api/reviews/:articleId/reject` | Reviewer+ | Reject article |
 | `POST` | `/api/reviews/:articleId/request-changes` | Reviewer+ | Request revisions |
+| `GET` | `/api/reviews/queue` | Reviewer+ | Risk-prioritized review queue |
 
 ### Admin
 
@@ -206,6 +222,9 @@ medipedia/
 | `GET` | `/api/admin/users` | Admin | List all users |
 | `POST` | `/api/admin/users/:id/role` | Admin | Update user role |
 | `POST` | `/api/admin/sources` | Admin | Add/update source domain policy |
+| `GET` | `/api/admin/jobs` | Admin | List generation + agent jobs |
+| `POST` | `/api/admin/jobs/:id/retry` | Admin | Retry generation/agent job |
+| `POST` | `/api/admin/jobs/requeue-dead-letter` | Admin | Requeue dead-letter/failure jobs |
 
 ### Internal
 
@@ -231,8 +250,18 @@ npm run prisma:generate  # Generate Prisma client
 npm run prisma:migrate   # Run database migrations
 npm run db:seed          # Seed base data
 npm run db:seed-articles # Seed sample articles
+npm run db:backfill-traceability # Backfill claim/citation traceability + freshness cache
 npm run agent:tick       # Trigger background agent processing
 ```
+
+---
+
+## Prompt Ops
+
+- Prompt versioning guide: `/Users/rumiallbert/Downloads/scrap/medipedia/docs/prompt-versioning.md`
+- Dead-letter recovery runbook: `/Users/rumiallbert/Downloads/scrap/medipedia/docs/runbooks/dead-letter-recovery.md`
+- Council drift investigation runbook: `/Users/rumiallbert/Downloads/scrap/medipedia/docs/runbooks/council-drift-investigation.md`
+- Prompt rollback runbook: `/Users/rumiallbert/Downloads/scrap/medipedia/docs/runbooks/prompt-rollback-by-version.md`
 
 ---
 

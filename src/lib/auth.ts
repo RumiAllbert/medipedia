@@ -27,7 +27,9 @@ const emailProvider = EmailProvider({
   server: process.env.EMAIL_SERVER ?? "smtp://localhost:1025",
   async sendVerificationRequest({ identifier, url, provider }) {
     if (!process.env.EMAIL_SERVER) {
-      console.log(`[auth] Magic link for ${identifier}: ${url}`);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[auth] Magic link for ${identifier}: ${url}`);
+      }
       return;
     }
 

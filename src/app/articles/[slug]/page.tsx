@@ -1,22 +1,23 @@
 import Link from "next/link";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArticleStatus, Role } from "@prisma/client";
-import { Copy, History, ExternalLink } from "lucide-react";
+import { ArticleStatus } from "@prisma/client";
+import { History, ExternalLink } from "lucide-react";
 
 import { auth } from "@/lib/auth";
-import { hasRole } from "@/lib/auth/roles";
 import { ArticleListen } from "@/components/article-listen";
 import { MissingArticleGate } from "@/components/missing-article-gate";
 import { Breadcrumb } from "@/components/breadcrumb";
+import { ReportIssueDialog } from "@/components/report-issue-dialog";
 import { TableOfContents } from "@/components/table-of-contents";
+import { TrustTimeline } from "@/components/trust-timeline";
 import { TrustScorecard } from "@/components/trust-scorecard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { featureFlags } from "@/lib/feature-flags";
+import { getArticleTimeline } from "@/lib/services/article-timeline";
 import { getVisibleArticleBySlug } from "@/lib/services/articles";
-import { latestCouncilRunForArticle } from "@/lib/services/council";
 import { ShareButton } from "@/components/share-button";
 
 type ArticlePageProps = {
@@ -34,24 +35,28 @@ function headingId(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
+function urlHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 export default async function ArticlePage({ params, searchParams }: ArticlePageProps) {
   const { slug } = await params;
   const { from } = await searchParams;
   const session = await auth();
-  const includeDrafts = hasRole(session?.user?.role, Role.CONTRIBUTOR);
-  const viewerId = session?.user?.id;
-
   const article = await getVisibleArticleBySlug({
     slug,
-    includeDrafts,
-    viewerId,
+    viewerId: session?.user?.id,
+    viewerRole: session?.user?.role,
   });
 
   if (!article) {
     return <MissingArticleGate slug={slug} from={from} />;
   }
 
-  const council = await latestCouncilRunForArticle(article.id);
   const draft = article.status !== ArticleStatus.PUBLISHED;
   const trustBreakdown = (article.trustBreakdownJson as Record<string, unknown> | null) ?? null;
   const sourceGate = (trustBreakdown?.sourceGate as Record<string, unknown> | undefined) ?? undefined;
@@ -61,6 +66,24 @@ export default async function ArticlePage({ params, searchParams }: ArticlePageP
       | undefined) ?? [];
 
   const tags = (article.metadata?.tags as string[] | null) ?? [];
+  const freshnessBadges = article.citations.map((citation) => ({
+    label: urlHostname(citation.url),
+    days: citation.freshnessDays,
+  }));
+  const evidenceTierSummary = citationDomains.reduce(
+    (acc, item) => {
+      if (item.tier === "A") acc.tierA += 1;
+      else if (item.tier === "B") acc.tierB += 1;
+      else if (item.tier === "C") acc.tierC += 1;
+      else acc.unknown += 1;
+      return acc;
+    },
+    { tierA: 0, tierB: 0, tierC: 0, unknown: 0 },
+  );
+  const timeline = featureFlags.trustTimeline ? await getArticleTimeline(article.id) : null;
+  const latestPromptRun = article.promptRuns[0] ?? null;
+  const latestCouncilRun = article.councilRuns[0] ?? null;
+  const promptModels = Array.from(new Set(article.promptRuns.map((run) => run.model)));
 
   return (
     <article className="mx-auto w-full max-w-6xl px-6 py-10">
@@ -101,6 +124,7 @@ export default async function ArticlePage({ params, searchParams }: ArticlePageP
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <ArticleListen title={article.title} summary={article.summary} markdown={article.bodyMarkdown} />
           <ShareButton />
+          {featureFlags.articleReporting && <ReportIssueDialog slug={slug} />}
           <Button variant="outline" size="sm" asChild>
             <Link href={`/articles/${slug}/history`}>
               <History className="mr-2 h-3.5 w-3.5" />
@@ -165,6 +189,37 @@ export default async function ArticlePage({ params, searchParams }: ArticlePageP
           >
             {article.bodyMarkdown}
           </Markdown>
+
+          {article.claims.length > 0 && (
+            <section className="mt-10 space-y-3">
+              <h3 className="text-xl font-semibold tracking-tight">Claim Traceability</h3>
+              {article.claims.map((claim) => (
+                <div key={claim.id} className="rounded-2xl border bg-muted/30 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{claim.sectionHeading}</Badge>
+                    <Badge variant="neutral">Confidence {claim.confidence}</Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">{claim.claimText}</p>
+                  {claim.citations.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {claim.citations.map((reference) => (
+                        <a
+                          key={reference.id}
+                          href={reference.citation.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs transition hover:bg-accent"
+                        >
+                          {reference.citation.title}
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
         </div>
 
         {/* Sidebar */}
@@ -186,8 +241,37 @@ export default async function ArticlePage({ params, searchParams }: ArticlePageP
                 confidenceLabel={article.confidenceLabel}
                 lastReviewedAt={article.lastReviewedAt}
                 nextReviewAt={article.nextReviewAt}
+                freshnessBadges={freshnessBadges}
+                evidenceTierSummary={evidenceTierSummary}
               />
             </div>
+
+            <Card className="mt-4">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Prompt & Model Provenance</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs text-muted-foreground">
+                <p>
+                  Latest prompt run:{" "}
+                  {latestPromptRun
+                    ? `${latestPromptRun.templateKey} v${latestPromptRun.templateVersion}`
+                    : "Not recorded"}
+                </p>
+                <p>
+                  Latest council prompt version: {latestCouncilRun?.promptVersion ?? "Not recorded"}
+                </p>
+                <p>
+                  Latest council policy version: {latestCouncilRun?.policyVersion ?? "Not recorded"}
+                </p>
+                <p>Models observed: {promptModels.length > 0 ? promptModels.join(", ") : "Not recorded"}</p>
+              </CardContent>
+            </Card>
+
+            {timeline && (
+              <div className="mt-4">
+                <TrustTimeline events={timeline.events} />
+              </div>
+            )}
 
             {/* Source tiers */}
             {citationDomains.length > 0 && (

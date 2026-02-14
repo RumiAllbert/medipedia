@@ -41,6 +41,12 @@ export async function POST(request: Request, { params }: Params) {
   if (!article) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  if (article.status !== ArticleStatus.PENDING_REVIEW) {
+    return NextResponse.json(
+      { error: "Only pending-review articles can be approved." },
+      { status: 409 },
+    );
+  }
 
   let councilRun = await latestCouncilRunForArticle(articleId);
   if (!councilRun) {
