@@ -31,7 +31,7 @@ export function ArticleCard({
 }: ArticleCardProps) {
   return (
     <Link href={`/articles/${slug}`} className="group block">
-      <Card className="h-full transition hover:-translate-y-0.5 hover:shadow-md">
+      <Card className="h-full glass transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-primary/5">
         <CardHeader className="pb-3">
           <div className="mb-2 flex items-center gap-2">
             <Badge variant={status === ArticleStatus.PUBLISHED ? "success" : "warning"}>
