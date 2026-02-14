@@ -46,6 +46,25 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      keyframes: {
+        "pulse-slow": {
+          "0%, 100%": { opacity: "0.4" },
+          "50%": { opacity: "0.8" },
+        },
+        "float": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
+        "score-fill": {
+          "0%": { strokeDashoffset: "283" },
+          "100%": { strokeDashoffset: "var(--score-offset)" },
+        },
+      },
+      animation: {
+        "pulse-slow": "pulse-slow 4s ease-in-out infinite",
+        "float": "float 6s ease-in-out infinite",
+        "score-fill": "score-fill 1.5s ease-out forwards",
+      },
     },
   },
   plugins: [tailwindAnimate],

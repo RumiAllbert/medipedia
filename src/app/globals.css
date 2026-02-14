@@ -66,3 +66,12 @@
     font-family: var(--font-display), Georgia, serif;
   }
 }
+
+@layer components {
+  .glass {
+    @apply border border-white/10 bg-card/60 backdrop-blur-xl;
+  }
+  .glass-strong {
+    @apply border border-white/15 bg-card/80 backdrop-blur-2xl shadow-lg;
+  }
+}
