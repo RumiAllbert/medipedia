@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { BrainCircuit, FlaskConical, ShieldCheck } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -19,18 +19,38 @@ export function LumiTooltip({ children }: { children: React.ReactNode }) {
         </TooltipTrigger>
         <TooltipContent
           side="bottom"
-          className="glass-strong max-w-xs rounded-xl border-white/10 p-4 text-left"
+          align="start"
+          className="glass-strong w-80 rounded-2xl border-white/10 p-0 text-left shadow-2xl"
         >
-          <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500/20 to-amber-500/20">
-              <Sparkles className="h-4 w-4 text-teal-400" />
+          {/* Header */}
+          <div className="border-b border-white/5 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-amber-500">
+                <BrainCircuit className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold tracking-tight">Lumi</p>
+                <p className="text-[11px] text-muted-foreground">
+                  AI Research Assistant
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold">Lumi</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                Medipedia&apos;s AI assistant. Generates evidence-based articles
-                with grounded citations, then submits them to a three-judge
-                council for trust scoring.
+          </div>
+
+          {/* Features */}
+          <div className="space-y-3 px-5 py-4">
+            <div className="flex items-start gap-2.5">
+              <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400" />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Generates evidence-based articles with grounded citations and
+                structured medical content.
+              </p>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Every article is evaluated by a three-judge council before
+                publication.
               </p>
             </div>
           </div>

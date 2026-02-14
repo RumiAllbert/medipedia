@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import {
-  Sparkles,
+  BrainCircuit,
   Scale,
   ShieldCheck,
   Eye,
   BookCheck,
-  Heart,
+  HeartPulse,
   Zap,
   Database,
   Code2,
   Palette,
   Brain,
   Lock,
+  Network,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -97,7 +98,7 @@ export default function AboutPage() {
           <div className="glass-strong rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/10">
-                <Sparkles className="h-5 w-5 text-teal-500" />
+                <BrainCircuit className="h-5 w-5 text-teal-500" />
               </div>
               <span className="text-xs font-medium text-muted-foreground">
                 Step 01
@@ -205,7 +206,7 @@ export default function AboutPage() {
           <div className="rounded-2xl border-2 border-emerald-500/30 bg-emerald-500/5 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-                <Heart className="h-5 w-5 text-emerald-500" />
+                <HeartPulse className="h-5 w-5 text-emerald-500" />
               </div>
               <Badge variant="success">PASS</Badge>
             </div>
@@ -241,7 +242,7 @@ export default function AboutPage() {
             { icon: Database, label: "Prisma + PostgreSQL" },
             { icon: Brain, label: "Google Gemini" },
             { icon: Lock, label: "NextAuth.js" },
-            { icon: Sparkles, label: "D3.js" },
+            { icon: Network, label: "D3.js" },
           ].map((tech) => (
             <div
               key={tech.label}

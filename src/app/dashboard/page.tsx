@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArticleStatus, Role } from "@prisma/client";
-import { PenTool, FileText, CheckCircle, Clock, Plus } from "lucide-react";
+import { NotebookPen, FileText, CheckCircle, Clock, Plus } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { hasRole } from "@/lib/auth/roles";
@@ -88,7 +88,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Drafts</CardTitle>
-            <PenTool className="h-4 w-4 text-muted-foreground" />
+            <NotebookPen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{drafts.length}</div>

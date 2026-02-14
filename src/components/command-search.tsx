@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Home, LogIn, Search, Sparkles, BookOpen } from "lucide-react";
+import { Home, LogIn, Search, Wand2, BookOpen } from "lucide-react";
 
 import {
   CommandDialog,
@@ -160,7 +160,7 @@ export function CommandSearchProvider({ children }: { children: ReactNode }) {
                     )
                   }
                 >
-                  <Sparkles className="mr-2 h-4 w-4 text-amber-500" />
+                  <Wand2 className="mr-2 h-4 w-4 text-amber-500" />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">Generate &ldquo;{query.trim()}&rdquo;</p>
                     <p className="text-xs text-muted-foreground">

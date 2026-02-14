@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Home, Search, Sparkles } from "lucide-react";
+import { Home, Search, Compass } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,7 +39,7 @@ export default function NotFound() {
         </Button>
         <Button variant="outline" asChild>
           <Link href="/topics">
-            <Sparkles className="mr-2 h-4 w-4" />
+            <Compass className="mr-2 h-4 w-4" />
             Browse topics
           </Link>
         </Button>
