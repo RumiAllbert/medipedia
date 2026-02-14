@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Cormorant_Garamond, Source_Sans_3 } from "next/font/google";
-import { Home, BookOpen, Globe, PenTool, Shield, LogOut, LogIn } from "lucide-react";
+import { Home, BookOpen, Globe, Info, PenTool, Shield, LogOut, LogIn } from "lucide-react";
 import { Role } from "@prisma/client";
 
 import { auth, signOut } from "@/lib/auth";
@@ -85,6 +85,13 @@ export default async function RootLayout({
                     >
                       <Globe className="h-4 w-4" />
                       Orbis
+                    </Link>
+                    <Link
+                      href="/about"
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <Info className="h-4 w-4" />
+                      About
                     </Link>
                     {isContributor && (
                       <Link

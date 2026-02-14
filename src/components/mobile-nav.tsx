@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Menu, Home, BookOpen, Globe, PenTool, Shield, LogIn } from "lucide-react";
+import { Menu, Home, BookOpen, Globe, Info, PenTool, Shield, LogIn } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +55,13 @@ export function MobileNav({ isContributor, isAdmin, isSignedIn }: MobileNavProps
           >
             <Globe className="h-4 w-4" />
             Orbis
+          </Link>
+          <Link
+            href="/about"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <Info className="h-4 w-4" />
+            About
           </Link>
           {isContributor && (
             <Link
