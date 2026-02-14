@@ -33,7 +33,8 @@ async function main() {
 
   for (const article of articles) {
     const staleFreshnessCitations = article.citations.filter(
-      (citation) => citation.publishedAt && citation.freshnessDays == null,
+      (citation: { id: string; url: string; publishedAt: Date | null; freshnessDays: number | null }) =>
+        citation.publishedAt && citation.freshnessDays == null,
     );
 
     if (!dryRun) {
